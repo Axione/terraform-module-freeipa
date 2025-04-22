@@ -33,6 +33,9 @@ variable "users" {
     uid_number               = optional(number)
     userclass                = optional(list(string))
     userpassword             = optional(string)
+
+		#custom
+		groups_membership  			 = optional(list(string))
   }))
   default = {}
 }
@@ -76,3 +79,24 @@ resource "freeipa_user" "this" {
   userclass                = each.value.userclass
   userpassword             = each.value.userpassword
 }
+
+locals {
+  # Flatten all user/group pairs, skipping null/missing groups
+  temp_user_group_pairs = flatten([
+    for user, udata in var.users : [
+      for group in coalesce(udata.groups_membership, []) : {
+        user  = user
+        group = group
+      }
+    ]
+  ])
+
+  # Build the groups_membership map
+  groups_membership_from_users = {
+    for group in distinct([for pair in local.temp_user_group_pairs : pair.group]) : group => {
+      user = [for pair in local.temp_user_group_pairs : pair.user if pair.group == group]
+    }
+  }
+}
+
+output "groups_membership_from_users" { value = local.groups_membership_from_users }

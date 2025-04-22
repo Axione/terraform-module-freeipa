@@ -23,13 +23,41 @@ variable "groups_membership" {
 
 ##################################################################################
 locals {
-  user_groups_membership = flatten([for key, value in var.groups_membership :
-    flatten([for type, members in value :
-      [for user in members : {
-        "name" = key
-        "user" = user }
-    ] if(type == "user" && members != null)])
-  ])
+  # Process groups_membership
+  membership_from_groups = flatten(
+    [
+      for team, membership in var.groups_membership : [
+				for user in (membership.user != null ? membership.user : []) : {
+          name = team
+          user = user
+        }
+      ]
+    ]
+  )
+
+  # Process groups_membership_from_users
+  membership_from_users = flatten(
+    [
+      for team, membership in local.groups_membership_from_users : [
+        for user in membership.user : {
+          name = team
+          user = user
+        }
+      ]
+    ]
+  )
+
+  # Combine both processed lists
+user_groups_membership = concat(local.membership_from_groups, local.membership_from_users)
+
+  #user_groups_membership = flatten([for key, value in var.groups_membership :
+  #  flatten([for type, members in value :
+  #    [for user in members : {
+  #      "name" = key
+  #      "user" = user }
+  #  ] if(type == "user" && members != null)])
+  #  ])
+
   group_groups_membership = flatten([for key, value in var.groups_membership :
     flatten([for type, members in value :
       [for user in members : {
