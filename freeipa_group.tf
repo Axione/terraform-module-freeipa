@@ -9,68 +9,12 @@ variable "groups" {
     gid_number  = optional(number)
     nonposix    = optional(bool)
     setattr     = optional(list(string))
+    users  = optional(list(string))
+    groups = optional(list(string))
+    external_members = optional(list(string))
   }))
   default = {}
 }
-
-variable "groups_membership" {
-  type = map(object({
-    group = optional(list(string))
-    user  = optional(list(string))
-  }))
-  default = {}
-}
-
-##################################################################################
-locals {
-  # Process groups_membership
-  membership_from_groups = flatten(
-    [
-      for team, membership in var.groups_membership : [
-				for user in (membership.user != null ? membership.user : []) : {
-          name = team
-          user = user
-        }
-      ]
-    ]
-  )
-
-  # Process groups_membership_from_users
-  membership_from_users = flatten(
-    [
-      for team, membership in local.groups_membership_from_users : [
-        for user in membership.user : {
-          name = team
-          user = user
-        }
-      ]
-    ]
-  )
-
-  # Combine both processed lists
-user_groups_membership = concat(local.membership_from_groups, local.membership_from_users)
-
-  #user_groups_membership = flatten([for key, value in var.groups_membership :
-  #  flatten([for type, members in value :
-  #    [for user in members : {
-  #      "name" = key
-  #      "user" = user }
-  #  ] if(type == "user" && members != null)])
-  #  ])
-
-  group_groups_membership = flatten([for key, value in var.groups_membership :
-    flatten([for type, members in value :
-      [for user in members : {
-        "name" = key
-        "group" = user }
-    ] if(type == "group" && members != null)])
-  ])
-
-}
-
-output "groups_membership" { value = var.groups_membership }
-output "user_groups_membership" { value = local.user_groups_membership }
-output "group_groups_membership" { value = local.group_groups_membership }
 
 ##################################################################################
 resource "freeipa_group" "this" {
@@ -85,18 +29,12 @@ resource "freeipa_group" "this" {
   setattr     = each.value.setattr
 }
 
-resource "freeipa_user_group_membership" "user" {
-  depends_on = [freeipa_group.this, freeipa_user.this]
-  for_each   = { for k, v in local.user_groups_membership : "${v.name}_-_${v.user}" => v }
-
-  name = each.value.name
-  user = each.value.user
-}
-
-resource "freeipa_user_group_membership" "group" {
+resource "freeipa_user_group_membership" "this" {
   depends_on = [freeipa_group.this]
-  for_each   = { for k, v in local.group_groups_membership : "${v.name}_-_${v.group}" => v }
+  for_each = var.groups
 
-  name  = each.value.name
-  group = each.value.group
+  name  = each.key
+  users = each.value.users
+  groups = each.value.groups
+  external_members = each.value.external_members
 }

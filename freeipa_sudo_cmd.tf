@@ -21,15 +21,6 @@ variable "sudo_cmd_group" {
 
 ##################################################################################
 locals {
-  flatten_sudo_cmd_group = flatten([
-    for policy, users in var.sudo_cmd_group : [
-      for sev in users.commands : {
-        name    = policy
-        command = sev
-      }
-    ]
-  ])
-
   sudo_cmd_group_list = distinct(flatten([
     for k, v in var.sudo_cmd_group : [
       v.commands
@@ -37,7 +28,6 @@ locals {
   ]))
 }
 
-output "flatten_sudo_cmd_group" { value = local.flatten_sudo_cmd_group }
 output "sudo_cmd_list" { value = local.sudo_cmd_group_list }
 
 ###################################################################################
@@ -55,7 +45,7 @@ resource "freeipa_sudo_cmdgroup" "this" {
 
 resource "freeipa_sudo_cmdgroup_membership" "this" {
   depends_on = [freeipa_sudo_cmdgroup.this]
-  for_each   = { for k, v in local.flatten_sudo_cmd_group : "${v.name}_-_${v.command}" => v }
-  name       = each.value.name
-  sudocmd    = each.value.command
+  for_each    = var.sudo_cmd_group
+  name        = each.key
+  sudocmds    = each.value.commands
 }
